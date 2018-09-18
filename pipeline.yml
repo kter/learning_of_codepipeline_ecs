@@ -124,6 +124,12 @@ Resources:
                   - ecr:GetAuthorizationToken
                 Resource:
                   - "*"
+              - Sid: ECSAccess
+                Effect: Allow
+                Action:
+                  - ecs:*
+                Resource:
+                  - "*"
               - Sid: KMSParameter
                 Effect: Allow
                 Action:
