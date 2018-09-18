@@ -1,34 +1,27 @@
 version: 0.2
 
-env:
-  variables:
-    JEKYLL_ENV: "staging"
-    LC_CTYPE: "C.UTF-8"
-  parameter-store:
-    STG_BUCKET: "STG_BUCKET"
-    PRD_BUCKET: "PRD_BUCKET"
 phases:
-  install:
-    commands:
-      - echo install jekyll
-      - apt-get update -y
-      - apt-get install -y software-properties-common
-      - apt-add-repository -y ppa:brightbox/ruby-ng
-      - apt-get update -y
-      - apt-get -y install ruby2.4 ruby2.4-dev
-      - gem install bundler
-      - apt-get install -y libffi-dev libxml2-dev libxslt-dev
   pre_build:
     commands:
-      - echo setuup jekyll
-      - bundle install --path vendor/bundle
+      - echo Logging in to Amazon ECR...
+      - aws --version
+      - $(aws ecr get-login --region $AWS_DEFAULT_REGION --no-include-email)
+      - REPOSITORY_URI=848738341109.dkr.ecr.us-east-1.amazonaws.com/test
+      - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
+      - IMAGE_TAG=${COMMIT_HASH:=latest}
   build:
     commands:
       - echo Build started on `date`
-      - echo build html
-      - bundle exec jekyll build
-      - echo Build completed on `date`
+      - echo Building the Docker image...          
+      - docker build -t $REPOSITORY_URI:latest .
+      - docker tag $REPOSITORY_URI:latest $REPOSITORY_URI:$IMAGE_TAG
   post_build:
     commands:
-      - echo deploy to S3
-      - aws s3 cp _site/ s3://$STG_BUCKET/ --recursive
+      - echo Build completed on `date`
+      - echo Pushing the Docker images...
+      - docker push $REPOSITORY_URI:latest
+      - docker push $REPOSITORY_URI:$IMAGE_TAG
+      - echo Writing image definitions file...
+      - printf '[{"name":"test","imageUri":"%s"}]' $REPOSITORY_URI:$IMAGE_TAG > imagedefinitions.json
+artifacts:
+    files: imagedefinitions.json

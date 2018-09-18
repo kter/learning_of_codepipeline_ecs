@@ -1,6 +1,6 @@
 Parameters:
   PipelineName:
-    Default: "blog2"
+    Default: "nradio-recorder"
     Description: "Name of Codepipeline"
     Type: String
   RepoOwner:
@@ -8,7 +8,7 @@ Parameters:
     Description: "Name of Codepipeline"
     Type: String
   Repo:
-    Default: "blog"
+    Default: "nradio-recorder"
     Description: "Name of Codepipeline"
     Type: String
   GitHubTokenCodePipeline:
@@ -18,19 +18,9 @@ Parameters:
     Description: Email Address
     Type: String
     Default: "me@kter.jp"
-  StgBucket:
-    Type: AWS::SSM::Parameter::Value<String>
-    Default: "STG_BUCKET"
-  PrdBucket:
-    Type: AWS::SSM::Parameter::Value<String>
-    Default: "PRD_BUCKET"
 Resources:
-  MySNSTopic:
-    Type: 'AWS::SNS::Topic'
-    Properties:
-      Subscription:
-        - Endpoint: !Ref EmailAddress
-          Protocol: email
+  Repository:
+    Type: AWS::ECR::Repository
   ArtifactStoreS3:
     Type: 'AWS::S3::Bucket'
   CodePipelineRole: 
@@ -69,21 +59,6 @@ Resources:
                   - "codedeploy:GetDeployment"
                   - "codedeploy:GetDeploymentConfig"
                   - "codedeploy:RegisterApplicationRevision"
-              - 
-                Effect: "Allow"
-                Resource: "*"
-                Action:
-                  - "cloudformation:GetTemplate"
-                  - "cloudformation:DescribeStackResource"
-                  - "cloudformation:DescribeStackResources"
-                  - "cloudformation:DescribeStackEvents"
-                  - "cloudformation:DescribeStacks"
-                  - "cloudformation:UpdateStack"
-                  - "iam:PassRole"
-              - Sid: SNSPublishAccess
-                Effect: Allow
-                Action: sns:Publish
-                Resource: !Ref MySNSTopic
               - Sid: CodeBuildAccess
                 Effect: Allow
                 Action:
@@ -91,7 +66,6 @@ Resources:
                   - codebuild:StartBuild
                 Resource:
                   - !GetAtt BuildProject.Arn
-                  - !GetAtt BuildProjectDeploy.Arn
   CodeBuildRole:
     Type: AWS::IAM::Role
     Properties:
@@ -129,13 +103,6 @@ Resources:
                   - "s3:*"
               - 
                 Effect: "Allow"
-                Resource:
-                  - !Join ['', ['arn:aws:s3:::', !Ref 'PrdBucket']]
-                  - !Join ['', ['arn:aws:s3:::', !Ref 'PrdBucket', '/*']]
-                Action:
-                  - "s3:*"
-              - 
-                Effect: "Allow"
                 Resource: "*"
                 Action:
                   - "codedeploy:CreateDeployment"
@@ -157,7 +124,6 @@ Resources:
                   - ssm:GetParameters
                 Resource:
                   - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/STG_BUCKET
-                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/PRD_BUCKET
   BuildProject:
     Description: Creating AWS CodeBuild project
     Type: AWS::CodeBuild::Project
@@ -179,26 +145,6 @@ Resources:
       ServiceRole: !GetAtt CodeBuildRole.Arn
       Source:
         Type: CODEPIPELINE
-      TimeoutInMinutes: 5
-  BuildProjectDeploy:
-    Description: Creating AWS CodeBuild project
-    Type: AWS::CodeBuild::Project
-    Properties:
-      Artifacts:
-        Type: CODEPIPELINE
-      Cache:
-        Type: S3
-        Location: !Join [ "/", [ !Ref ArtifactStoreS3, buildcache ]]
-      Environment:
-        ComputeType: BUILD_GENERAL1_SMALL
-        Image: "aws/codebuild/docker:17.09.0"
-        PrivilegedMode: true
-        Type: LINUX_CONTAINER
-      Name: BuildProjectDeploy
-      ServiceRole: !GetAtt CodeBuildRole.Arn
-      Source:
-        Type: CODEPIPELINE
-        BuildSpec: "buildspec_prd.yml"
       TimeoutInMinutes: 5
   AppPipeline: 
     Type: "AWS::CodePipeline::Pipeline"
@@ -226,7 +172,7 @@ Resources:
                 OAuthToken: !Ref GitHubTokenCodePipeline
               RunOrder: 1
         -
-          Name: Beta
+          Name: build
           Actions: 
             - 
               Name: BetaAction
@@ -240,21 +186,6 @@ Resources:
                 Provider: CodeBuild
               Configuration: 
                 ProjectName: !Ref BuildProject
-              RunOrder: 1
-        -
-          Name: ExploratoryTesting
-          Actions:
-            - InputArtifacts: []
-              Name: QA
-              ActionTypeId:
-                Category: Approval
-                Owner: AWS
-                Version: '1'
-                Provider: Manual
-              OutputArtifacts: []
-              Configuration:
-                NotificationArn: !Ref MySNSTopic
-                CustomData: Approval or Reject this change after running Exploratory Tests
               RunOrder: 1
         - 
           Name: Release
@@ -270,7 +201,7 @@ Resources:
                 Version: 1
                 Provider: CodeBuild
               Configuration: 
-                ProjectName: !Ref BuildProjectDeploy
+                ProjectName: !Ref BuildProject
               RunOrder: 1
       ArtifactStore: 
         Type: S3
