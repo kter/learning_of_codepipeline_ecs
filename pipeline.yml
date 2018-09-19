@@ -122,6 +122,7 @@ Resources:
                 Effect: Allow
                 Action:
                   - ecr:GetAuthorizationToken
+                  - ecr:InitiateLayerUpload
                 Resource:
                   - "*"
               - Sid: ECSAccess
@@ -188,22 +189,6 @@ Resources:
           Actions: 
             - 
               Name: BetaAction
-              InputArtifacts: 
-                - 
-                  Name: SourceOutput
-              ActionTypeId: 
-                Category: Build
-                Owner: AWS
-                Version: 1
-                Provider: CodeBuild
-              Configuration: 
-                ProjectName: !Ref BuildProject
-              RunOrder: 1
-        - 
-          Name: Release
-          Actions: 
-            - 
-              Name: ReleaseAction
               InputArtifacts: 
                 - 
                   Name: SourceOutput
