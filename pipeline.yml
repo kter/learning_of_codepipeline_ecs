@@ -97,8 +97,8 @@ Resources:
               - 
                 Effect: "Allow"
                 Resource:
-                  - !Join ['', ['arn:aws:s3:::', !Ref 'StgBucket']]
-                  - !Join ['', ['arn:aws:s3:::', !Ref 'StgBucket', '/*']]
+                  - !Join ['', ['arn:aws:s3:::', !Ref 'ArtifactStoreS3']]
+                  - !Join ['', ['arn:aws:s3:::', !Ref 'ArtifactStoreS3', '/*']]
                 Action:
                   - "s3:*"
               - 
@@ -153,7 +153,7 @@ Resources:
         Image: "aws/codebuild/docker:17.09.0"
         PrivilegedMode: true
         Type: LINUX_CONTAINER
-      Name: BuildProject
+      Name: ImageBuild
       ServiceRole: !GetAtt CodeBuildRole.Arn
       Source:
         Type: CODEPIPELINE
