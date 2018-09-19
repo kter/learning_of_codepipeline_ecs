@@ -3,11 +3,15 @@ Parameters:
     Default: "nradio-recorder"
     Description: "Name of Codepipeline"
     Type: String
+  ImageRepositoryName:
+    Default: "nradio-recorder"
+    Description: "Name of ECR"
+    Type: String
   RepoOwner:
     Default: "kter"
     Description: "Name of Codepipeline"
     Type: String
-  Repo:
+  GitHubRepo:
     Default: "nradio-recorder"
     Description: "Name of Codepipeline"
     Type: String
@@ -19,8 +23,10 @@ Parameters:
     Type: String
     Default: "me@kter.jp"
 Resources:
-  Repository:
+  ImageRepository:
     Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Ref ImageRepositoryName
   ArtifactStoreS3:
     Type: 'AWS::S3::Bucket'
   CodePipelineRole: 
@@ -180,7 +186,7 @@ Resources:
                   Name: SourceOutput
               Configuration: 
                 Owner: !Ref RepoOwner
-                Repo: !Ref Repo
+                Repo: !Ref GitHubRepo
                 Branch: master
                 OAuthToken: !Ref GitHubTokenCodePipeline
               RunOrder: 1
