@@ -219,7 +219,3 @@ Resources:
       ArtifactStore: 
         Type: S3
         Location: !Ref ArtifactStoreS3
-      DisableInboundStageTransitions: 
-        - 
-          StageName: Release
-          Reason: "Disabling the transition until integration tests are completed"
