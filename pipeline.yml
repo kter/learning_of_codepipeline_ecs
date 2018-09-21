@@ -128,9 +128,19 @@ Resources:
                 Effect: Allow
                 Action:
                   - ecr:GetAuthorizationToken
-                  - ecr:InitiateLayerUpload
                 Resource:
-                  - "*"
+                  - '*'
+              - Sid: ECRAccess2
+                Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+                  - ecr:InitiateLayerUpload
+                  - ecr:UploadLayerPart
+                Resource:
+                  - 'arn:aws:ecr:*:*:repository/nradio-recorder'
+                  #- ''
+                  #- - 'arn:aws:ecr:*:*:repository/'
+                  #  - !Ref ImageRepositoryName
               - Sid: ECSAccess
                 Effect: Allow
                 Action:
