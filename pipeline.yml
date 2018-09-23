@@ -1,3 +1,4 @@
+# TODO: Nested Stack https://maya2250.hatenablog.com/entry/2018/06/23/231826
 Parameters:
   PipelineName:
     Default: "nradio-recorder"
@@ -22,7 +23,85 @@ Parameters:
     Description: Email Address
     Type: String
     Default: "me@kter.jp"
+  DesiredCount:
+    Description: ECS desired count
+    Type: Number
+    Default: 1
+  SourceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup::Id
+  Subnets:
+    Type: List<AWS::EC2::Subnet::Id>
 Resources:
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Ref AWS::StackName
+  TaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /ecs/${AWS::StackName}
+  ECSService:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster: !Ref ECSCluster
+      DesiredCount: !Ref DesiredCount
+      TaskDefinition: !Ref TaskDefinition
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !Ref SourceSecurityGroup
+          Subnets: !Ref Subnets
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${AWS::StackName}-simple-app
+      Memory: 512
+      Cpu: 256
+      NetworkMode: awsvpc
+      ExecutionRoleArn: !Ref TaskExecutionRole
+      ContainerDefinitions:
+        - Name: simple-app
+          Image: amazon/amazon-ecs-sample
+          EntryPoint:
+            - /usr/sbin/apache2
+            - -D
+            - FOREGROUND
+          Essential: true
+          Memory: 256
+          PortMappings:
+            - ContainerPort: 80
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-region: !Ref AWS::Region
+              awslogs-group: !Ref LogGroup
+              awslogs-stream-prefix: !Ref AWS::StackName
+        - Name: busybox
+          Image: busybox
+          EntryPoint:
+            - sh
+            - -c
+          Essential: true
+          Memory: 256
+          VolumesFrom:
+            - SourceContainer: simple-app
+          Command:
+            - /bin/sh -c "while true; do /bin/date > /var/www/my-vol/date; sleep 1; done"
   ImageRepository:
     Type: AWS::ECR::Repository
     Properties:
@@ -206,6 +285,9 @@ Resources:
               InputArtifacts: 
                 - 
                   Name: SourceOutput
+              OutputArtifacts: 
+                - 
+                  Name: BuildOutput
               ActionTypeId: 
                 Category: Build
                 Owner: AWS
@@ -213,6 +295,24 @@ Resources:
                 Provider: CodeBuild
               Configuration: 
                 ProjectName: !Ref BuildProject
+              RunOrder: 1
+        -
+          Name: deploy
+          Actions: 
+            - 
+              Name: DeployToECS
+              InputArtifacts: 
+                - 
+                  Name: BuildOutput
+              ActionTypeId: 
+                Category: Deploy
+                Owner: AWS
+                Version: 1
+                Provider: ECS
+              Configuration:
+                ClusterName: !Ref ECSCluster
+                ServiceName: !Ref ECSService
+                FileName: imagedefinitions.json
               RunOrder: 1
       ArtifactStore: 
         Type: S3
