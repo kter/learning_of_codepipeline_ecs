@@ -206,6 +206,9 @@ Resources:
               InputArtifacts: 
                 - 
                   Name: SourceOutput
+              OutputArtifacts: 
+                - 
+                  Name: BuildOutput
               ActionTypeId: 
                 Category: Build
                 Owner: AWS
@@ -213,6 +216,24 @@ Resources:
                 Provider: CodeBuild
               Configuration: 
                 ProjectName: !Ref BuildProject
+              RunOrder: 1
+        -
+          Name: deploy
+          Actions: 
+            - 
+              Name: DeployToECS
+              InputArtifacts: 
+                - 
+                  Name: BuildOutput
+              ActionTypeId: 
+                Category: Deploy
+                Owner: AWS
+                Version: 1
+                Provider: ECS
+              Configuration:
+                ClusterName: !Ref ECSCluster
+                ServiceName: !Ref ECSService
+                FileName: imagedefinitions.json
               RunOrder: 1
       ArtifactStore: 
         Type: S3
