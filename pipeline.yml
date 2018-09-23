@@ -1,3 +1,4 @@
+# TODO: Nested Stack https://maya2250.hatenablog.com/entry/2018/06/23/231826
 Parameters:
   PipelineName:
     Default: "nradio-recorder"
@@ -26,6 +27,10 @@ Parameters:
     Description: ECS desired count
     Type: Number
     Default: 1
+  SourceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup::Id
+  Subnets:
+    Type: List<AWS::EC2::Subnet::Id>
 Resources:
   ECSCluster:
     Type: AWS::ECS::Cluster
@@ -61,7 +66,6 @@ Resources:
           SecurityGroups:
             - !Ref SourceSecurityGroup
           Subnets: !Ref Subnets
-
   TaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
@@ -98,10 +102,6 @@ Resources:
             - SourceContainer: simple-app
           Command:
             - /bin/sh -c "while true; do /bin/date > /var/www/my-vol/date; sleep 1; done"
-  SourceSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-  Subnets:
-    Type: AWS::EC2::Subnet
   ImageRepository:
     Type: AWS::ECR::Repository
     Properties:
