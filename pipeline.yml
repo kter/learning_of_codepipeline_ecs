@@ -73,7 +73,7 @@ Resources:
   TaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
-      Family: !Sub ${AWS::StackName}-simple-app
+      Family: !Sub ${AWS::StackName}-app-web
       Memory: 512
       Cpu: 256
       NetworkMode: awsvpc
@@ -151,6 +151,24 @@ Resources:
                 Resource:
                   - !GetAtt WebBuildProject.Arn
                   - !GetAtt AppBuildProject.Arn
+              - Sid: ECSAccess
+                Effect: Allow
+                Action:
+                  - ecs:DescribeServices
+                  - ecs:DescribeTaskDefinition
+                  - ecs:DescribeTasks
+                  - ecs:ListTasks
+                  - ecs:RegisterTaskDefinition
+                  - ecs:UpdateService
+                Resource:
+                  - "*"
+        - PolicyName: PassRole
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: iam:PassRole
+                Resource: '*'
   CodeBuildRole:
     Type: AWS::IAM::Role
     Properties:
@@ -220,7 +238,8 @@ Resources:
                   - ecr:BatchCheckLayerAvailability
                   - ecr:PutImage
                 Resource:
-                  - 'arn:aws:ecr:*:*:repository/nradio-recorder'
+                  - 'arn:aws:ecr:*:*:repository/app'
+                  - 'arn:aws:ecr:*:*:repository/web'
                   #- ''
                   #- - 'arn:aws:ecr:*:*:repository/'
                   #  - !Ref ImageRepositoryName
