@@ -251,6 +251,7 @@ Resources:
       ServiceRole: !GetAtt CodeBuildRole.Arn
       Source:
         Type: CODEPIPELINE
+        BuildSpec: buildspec_web.yml
       TimeoutInMinutes: 5
   AppBuildProject:
     Description: Creating AWS CodeBuild project
