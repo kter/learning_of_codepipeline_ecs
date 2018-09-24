@@ -4,8 +4,12 @@ Parameters:
     Default: "nradio-recorder"
     Description: "Name of Codepipeline"
     Type: String
-  ImageRepositoryName:
-    Default: "nradio-recorder"
+  WebImageRepositoryName:
+    Default: "web"
+    Description: "Name of ECR"
+    Type: String
+  AppImageRepositoryName:
+    Default: "app"
     Description: "Name of ECR"
     Type: String
   RepoOwner:
@@ -13,7 +17,7 @@ Parameters:
     Description: "Name of Codepipeline"
     Type: String
   GitHubRepo:
-    Default: "nradio-recorder"
+    Default: "learning_of_codepipeline_ecs"
     Description: "Name of Codepipeline"
     Type: String
   GitHubTokenCodePipeline:
@@ -75,37 +79,32 @@ Resources:
       NetworkMode: awsvpc
       ExecutionRoleArn: !Ref TaskExecutionRole
       ContainerDefinitions:
-        - Name: simple-app
-          Image: amazon/amazon-ecs-sample
-          EntryPoint:
-            - /usr/sbin/apache2
-            - -D
-            - FOREGROUND
+        - Name: app
+          Image: 848738341109.dkr.ecr.us-east-1.amazonaws.com/app:latest
           Essential: true
           Memory: 256
-          PortMappings:
-            - ContainerPort: 80
           LogConfiguration:
             LogDriver: awslogs
             Options:
               awslogs-region: !Ref AWS::Region
               awslogs-group: !Ref LogGroup
               awslogs-stream-prefix: !Ref AWS::StackName
-        - Name: busybox
-          Image: busybox
-          EntryPoint:
-            - sh
-            - -c
+        - Name: web
+          Image: 848738341109.dkr.ecr.us-east-1.amazonaws.com/web:latest
           Essential: true
           Memory: 256
+          PortMappings:
+            - ContainerPort: 80
           VolumesFrom:
-            - SourceContainer: simple-app
-          Command:
-            - /bin/sh -c "while true; do /bin/date > /var/www/my-vol/date; sleep 1; done"
-  ImageRepository:
+            - SourceContainer: app
+  WebImageRepository:
     Type: AWS::ECR::Repository
     Properties:
-      RepositoryName: !Ref ImageRepositoryName
+      RepositoryName: !Ref WebImageRepositoryName
+  AppImageRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Ref AppImageRepositoryName
   ArtifactStoreS3:
     Type: 'AWS::S3::Bucket'
   CodePipelineRole: 
@@ -150,7 +149,8 @@ Resources:
                   - codebuild:BatchGetBuilds
                   - codebuild:StartBuild
                 Resource:
-                  - !GetAtt BuildProject.Arn
+                  - !GetAtt WebBuildProject.Arn
+                  - !GetAtt AppBuildProject.Arn
   CodeBuildRole:
     Type: AWS::IAM::Role
     Properties:
@@ -230,7 +230,7 @@ Resources:
                   - ecs:*
                 Resource:
                   - "*"
-  BuildProject:
+  WebBuildProject:
     Description: Creating AWS CodeBuild project
     Type: AWS::CodeBuild::Project
     Properties:
@@ -247,10 +247,33 @@ Resources:
         Image: "aws/codebuild/docker:17.09.0"
         PrivilegedMode: true
         Type: LINUX_CONTAINER
-      Name: ImageBuild
+      Name: WebImageBuild
       ServiceRole: !GetAtt CodeBuildRole.Arn
       Source:
         Type: CODEPIPELINE
+      TimeoutInMinutes: 5
+  AppBuildProject:
+    Description: Creating AWS CodeBuild project
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      Cache:
+        Type: S3
+        Location: !Join [ "/", [ !Ref ArtifactStoreS3, buildcache ]]
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        EnvironmentVariables:
+          - Name: Branch
+            Value: master
+        Image: "aws/codebuild/docker:17.09.0"
+        PrivilegedMode: true
+        Type: LINUX_CONTAINER
+      Name: AppImageBuild
+      ServiceRole: !GetAtt CodeBuildRole.Arn
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: buildspec_app.yml
       TimeoutInMinutes: 5
   AppPipeline: 
     Type: "AWS::CodePipeline::Pipeline"
@@ -281,29 +304,45 @@ Resources:
           Name: build
           Actions: 
             - 
-              Name: BetaAction
+              Name: web
               InputArtifacts: 
                 - 
                   Name: SourceOutput
               OutputArtifacts: 
                 - 
-                  Name: BuildOutput
+                  Name: WebBuildOutput
               ActionTypeId: 
                 Category: Build
                 Owner: AWS
                 Version: 1
                 Provider: CodeBuild
               Configuration: 
-                ProjectName: !Ref BuildProject
+                ProjectName: !Ref WebBuildProject
+              RunOrder: 1
+            - 
+              Name: app
+              InputArtifacts: 
+                - 
+                  Name: SourceOutput
+              OutputArtifacts: 
+                - 
+                  Name: AppBuildOutput
+              ActionTypeId: 
+                Category: Build
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              Configuration: 
+                ProjectName: !Ref AppBuildProject
               RunOrder: 1
         -
           Name: deploy
           Actions: 
             - 
-              Name: DeployToECS
+              Name: DeployAppToECS
               InputArtifacts: 
                 - 
-                  Name: BuildOutput
+                  Name: AppBuildOutput
               ActionTypeId: 
                 Category: Deploy
                 Owner: AWS
@@ -312,7 +351,22 @@ Resources:
               Configuration:
                 ClusterName: !Ref ECSCluster
                 ServiceName: !Ref ECSService
-                FileName: imagedefinitions.json
+                FileName: appimagedefinitions.json
+              RunOrder: 1
+            - 
+              Name: DeployWebToECS
+              InputArtifacts: 
+                - 
+                  Name: WebBuildOutput
+              ActionTypeId: 
+                Category: Deploy
+                Owner: AWS
+                Version: 1
+                Provider: ECS
+              Configuration:
+                ClusterName: !Ref ECSCluster
+                ServiceName: !Ref ECSService
+                FileName: webimagedefinitions.json
               RunOrder: 1
       ArtifactStore: 
         Type: S3
