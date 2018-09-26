@@ -16,8 +16,12 @@ Parameters:
     Default: "kter"
     Description: "Name of Codepipeline"
     Type: String
-  GitHubRepo:
-    Default: "learning_of_codepipeline_ecs"
+  AppGitHubRepo:
+    Default: "learning_of_codepipeline_ecs_app"
+    Description: "Name of Codepipeline"
+    Type: String
+  WebGitHubRepo:
+    Default: "learning_of_codepipeline_ecs_web"
     Description: "Name of Codepipeline"
     Type: String
   GitHubTokenCodePipeline:
@@ -305,7 +309,7 @@ Resources:
           Name: Source
           Actions: 
             - 
-              Name: SourceAction
+              Name: AppSourceAction
               ActionTypeId: 
                 Category: Source
                 Owner: ThirdParty
@@ -313,10 +317,26 @@ Resources:
                 Provider: GitHub
               OutputArtifacts: 
                 - 
-                  Name: SourceOutput
+                  Name: AppSourceOutput
               Configuration: 
                 Owner: !Ref RepoOwner
-                Repo: !Ref GitHubRepo
+                Repo: !Ref AppGitHubRepo
+                Branch: master
+                OAuthToken: !Ref GitHubTokenCodePipeline
+              RunOrder: 1
+            - 
+              Name: WebSourceAction
+              ActionTypeId: 
+                Category: Source
+                Owner: ThirdParty
+                Version: 1
+                Provider: GitHub
+              OutputArtifacts: 
+                - 
+                  Name: WebSourceOutput
+              Configuration: 
+                Owner: !Ref RepoOwner
+                Repo: !Ref WebGitHubRepo
                 Branch: master
                 OAuthToken: !Ref GitHubTokenCodePipeline
               RunOrder: 1
@@ -327,7 +347,7 @@ Resources:
               Name: web
               InputArtifacts: 
                 - 
-                  Name: SourceOutput
+                  Name: WebSourceOutput
               OutputArtifacts: 
                 - 
                   Name: WebBuildOutput
@@ -343,7 +363,7 @@ Resources:
               Name: app
               InputArtifacts: 
                 - 
-                  Name: SourceOutput
+                  Name: AppSourceOutput
               OutputArtifacts: 
                 - 
                   Name: AppBuildOutput
