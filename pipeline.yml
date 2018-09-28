@@ -1,9 +1,5 @@
 # TODO: Nested Stack https://maya2250.hatenablog.com/entry/2018/06/23/231826
 Parameters:
-  PipelineName:
-    Default: "learning_of_codepipeline_ecs_app"
-    Description: "Name of Codepipeline"
-    Type: String
   WebImageRepositoryName:
     Default: "web"
     Description: "Name of ECR"
@@ -302,7 +298,6 @@ Resources:
   AppPipeline: 
     Type: "AWS::CodePipeline::Pipeline"
     Properties: 
-      Name: !Ref PipelineName
       RoleArn: !GetAtt CodePipelineRole.Arn
       Stages: 
         - 
@@ -324,6 +319,54 @@ Resources:
                 Branch: master
                 OAuthToken: !Ref GitHubTokenCodePipeline
               RunOrder: 1
+        -
+          Name: build
+          Actions: 
+            - 
+              Name: app
+              InputArtifacts: 
+                - 
+                  Name: AppSourceOutput
+              OutputArtifacts: 
+                - 
+                  Name: AppBuildOutput
+              ActionTypeId: 
+                Category: Build
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              Configuration: 
+                ProjectName: !Ref AppBuildProject
+              RunOrder: 1
+        -
+          Name: deploy
+          Actions: 
+            - 
+              Name: DeployAppToECS
+              InputArtifacts: 
+                - 
+                  Name: AppBuildOutput
+              ActionTypeId: 
+                Category: Deploy
+                Owner: AWS
+                Version: 1
+                Provider: ECS
+              Configuration:
+                ClusterName: !Ref ECSCluster
+                ServiceName: !Ref ECSService
+                FileName: appimagedefinitions.json
+              RunOrder: 1
+      ArtifactStore: 
+        Type: S3
+        Location: !Ref ArtifactStoreS3
+  WebPipeline: 
+    Type: "AWS::CodePipeline::Pipeline"
+    Properties: 
+      RoleArn: !GetAtt CodePipelineRole.Arn
+      Stages: 
+        - 
+          Name: Source
+          Actions: 
             - 
               Name: WebSourceAction
               ActionTypeId: 
@@ -359,40 +402,9 @@ Resources:
               Configuration: 
                 ProjectName: !Ref WebBuildProject
               RunOrder: 1
-            - 
-              Name: app
-              InputArtifacts: 
-                - 
-                  Name: AppSourceOutput
-              OutputArtifacts: 
-                - 
-                  Name: AppBuildOutput
-              ActionTypeId: 
-                Category: Build
-                Owner: AWS
-                Version: 1
-                Provider: CodeBuild
-              Configuration: 
-                ProjectName: !Ref AppBuildProject
-              RunOrder: 1
         -
           Name: deploy
           Actions: 
-            - 
-              Name: DeployAppToECS
-              InputArtifacts: 
-                - 
-                  Name: AppBuildOutput
-              ActionTypeId: 
-                Category: Deploy
-                Owner: AWS
-                Version: 1
-                Provider: ECS
-              Configuration:
-                ClusterName: !Ref ECSCluster
-                ServiceName: !Ref ECSService
-                FileName: appimagedefinitions.json
-              RunOrder: 1
             - 
               Name: DeployWebToECS
               InputArtifacts: 
