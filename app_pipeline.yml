@@ -4,10 +4,6 @@ Parameters:
     Default: "nradio-recorder"
     Description: "Name of Codepipeline"
     Type: String
-  WebImageRepositoryName:
-    Default: "web"
-    Description: "Name of ECR"
-    Type: String
   AppImageRepositoryName:
     Default: "app"
     Description: "Name of ECR"
@@ -18,10 +14,6 @@ Parameters:
     Type: String
   AppGitHubRepo:
     Default: "learning_of_codepipeline_ecs_app"
-    Description: "Name of Codepipeline"
-    Type: String
-  WebGitHubRepo:
-    Default: "learning_of_codepipeline_ecs_web"
     Description: "Name of Codepipeline"
     Type: String
   GitHubTokenCodePipeline:
@@ -93,18 +85,6 @@ Resources:
               awslogs-region: !Ref AWS::Region
               awslogs-group: !Ref LogGroup
               awslogs-stream-prefix: !Ref AWS::StackName
-        - Name: web
-          Image: 848738341109.dkr.ecr.us-east-1.amazonaws.com/web:latest
-          Essential: true
-          Memory: 256
-          PortMappings:
-            - ContainerPort: 80
-          VolumesFrom:
-            - SourceContainer: app
-  WebImageRepository:
-    Type: AWS::ECR::Repository
-    Properties:
-      RepositoryName: !Ref WebImageRepositoryName
   AppImageRepository:
     Type: AWS::ECR::Repository
     Properties:
@@ -153,7 +133,6 @@ Resources:
                   - codebuild:BatchGetBuilds
                   - codebuild:StartBuild
                 Resource:
-                  - !GetAtt WebBuildProject.Arn
                   - !GetAtt AppBuildProject.Arn
               - Sid: ECSAccess
                 Effect: Allow
@@ -243,7 +222,6 @@ Resources:
                   - ecr:PutImage
                 Resource:
                   - 'arn:aws:ecr:*:*:repository/app'
-                  - 'arn:aws:ecr:*:*:repository/web'
                   #- ''
                   #- - 'arn:aws:ecr:*:*:repository/'
                   #  - !Ref ImageRepositoryName
@@ -253,29 +231,6 @@ Resources:
                   - ecs:*
                 Resource:
                   - "*"
-  WebBuildProject:
-    Description: Creating AWS CodeBuild project
-    Type: AWS::CodeBuild::Project
-    Properties:
-      Artifacts:
-        Type: CODEPIPELINE
-      Cache:
-        Type: S3
-        Location: !Join [ "/", [ !Ref ArtifactStoreS3, buildcache ]]
-      Environment:
-        ComputeType: BUILD_GENERAL1_SMALL
-        EnvironmentVariables:
-          - Name: Branch
-            Value: master
-        Image: "aws/codebuild/docker:17.09.0"
-        PrivilegedMode: true
-        Type: LINUX_CONTAINER
-      Name: WebImageBuild
-      ServiceRole: !GetAtt CodeBuildRole.Arn
-      Source:
-        Type: CODEPIPELINE
-        BuildSpec: buildspec_web.yml
-      TimeoutInMinutes: 5
   AppBuildProject:
     Description: Creating AWS CodeBuild project
     Type: AWS::CodeBuild::Project
@@ -324,41 +279,9 @@ Resources:
                 Branch: master
                 OAuthToken: !Ref GitHubTokenCodePipeline
               RunOrder: 1
-            - 
-              Name: WebSourceAction
-              ActionTypeId: 
-                Category: Source
-                Owner: ThirdParty
-                Version: 1
-                Provider: GitHub
-              OutputArtifacts: 
-                - 
-                  Name: WebSourceOutput
-              Configuration: 
-                Owner: !Ref RepoOwner
-                Repo: !Ref WebGitHubRepo
-                Branch: master
-                OAuthToken: !Ref GitHubTokenCodePipeline
-              RunOrder: 1
         -
           Name: build
           Actions: 
-            - 
-              Name: web
-              InputArtifacts: 
-                - 
-                  Name: WebSourceOutput
-              OutputArtifacts: 
-                - 
-                  Name: WebBuildOutput
-              ActionTypeId: 
-                Category: Build
-                Owner: AWS
-                Version: 1
-                Provider: CodeBuild
-              Configuration: 
-                ProjectName: !Ref WebBuildProject
-              RunOrder: 1
             - 
               Name: app
               InputArtifacts: 
@@ -392,21 +315,6 @@ Resources:
                 ClusterName: !Ref ECSCluster
                 ServiceName: !Ref ECSService
                 FileName: appimagedefinitions.json
-              RunOrder: 1
-            - 
-              Name: DeployWebToECS
-              InputArtifacts: 
-                - 
-                  Name: WebBuildOutput
-              ActionTypeId: 
-                Category: Deploy
-                Owner: AWS
-                Version: 1
-                Provider: ECS
-              Configuration:
-                ClusterName: !Ref ECSCluster
-                ServiceName: !Ref ECSService
-                FileName: webimagedefinitions.json
               RunOrder: 1
       ArtifactStore: 
         Type: S3
