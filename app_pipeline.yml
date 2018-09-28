@@ -1,7 +1,7 @@
 # TODO: Nested Stack https://maya2250.hatenablog.com/entry/2018/06/23/231826
 Parameters:
   PipelineName:
-    Default: "nradio-recorder"
+    Default: "learning_of_codepipeline_ecs_app"
     Description: "Name of Codepipeline"
     Type: String
   AppImageRepositoryName:

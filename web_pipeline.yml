@@ -1,7 +1,7 @@
 # TODO: Nested Stack https://maya2250.hatenablog.com/entry/2018/06/23/231826
 Parameters:
   PipelineName:
-    Default: "nradio-recorder"
+    Default: "learning_of_codepipeline_ecs_web"
     Description: "Name of Codepipeline"
     Type: String
   WebImageRepositoryName:
@@ -188,8 +188,10 @@ Resources:
                 Resource: "*"
                 Action:
                   - "codedeploy:CreateDeployment"
+                  - "codedeploy:GetApplicationRevision"
                   - "codedeploy:GetDeployment"
                   - "codedeploy:GetDeploymentConfig"
+                  - "codedeploy:RegisterApplicationRevision"
               - Sid: CloudWatchLogsAccess
                 Effect: Allow
                 Action:
@@ -292,7 +294,6 @@ Resources:
               Configuration: 
                 ProjectName: !Ref WebBuildProject
               RunOrder: 1
-            - 
         -
           Name: deploy
           Actions: 
