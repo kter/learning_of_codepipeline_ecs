@@ -1,15 +1,23 @@
 # TODO: Nested Stack https://maya2250.hatenablog.com/entry/2018/06/23/231826
 Parameters:
   PipelineName:
-    Default: "learning_of_codepipeline_ecs_web"
+    Default: "learning_of_codepipeline_ecs_app"
     Description: "Name of Codepipeline"
     Type: String
   WebImageRepositoryName:
     Default: "web"
     Description: "Name of ECR"
     Type: String
+  AppImageRepositoryName:
+    Default: "app"
+    Description: "Name of ECR"
+    Type: String
   RepoOwner:
     Default: "kter"
+    Description: "Name of Codepipeline"
+    Type: String
+  AppGitHubRepo:
+    Default: "learning_of_codepipeline_ecs_app"
     Description: "Name of Codepipeline"
     Type: String
   WebGitHubRepo:
@@ -75,16 +83,32 @@ Resources:
       NetworkMode: awsvpc
       ExecutionRoleArn: !Ref TaskExecutionRole
       ContainerDefinitions:
+        - Name: app
+          Image: 848738341109.dkr.ecr.us-east-1.amazonaws.com/app:latest
+          Essential: true
+          Memory: 256
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-region: !Ref AWS::Region
+              awslogs-group: !Ref LogGroup
+              awslogs-stream-prefix: !Ref AWS::StackName
         - Name: web
           Image: 848738341109.dkr.ecr.us-east-1.amazonaws.com/web:latest
           Essential: true
           Memory: 256
           PortMappings:
             - ContainerPort: 80
+          VolumesFrom:
+            - SourceContainer: app
   WebImageRepository:
     Type: AWS::ECR::Repository
     Properties:
       RepositoryName: !Ref WebImageRepositoryName
+  AppImageRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Ref AppImageRepositoryName
   ArtifactStoreS3:
     Type: 'AWS::S3::Bucket'
   CodePipelineRole: 
@@ -130,6 +154,7 @@ Resources:
                   - codebuild:StartBuild
                 Resource:
                   - !GetAtt WebBuildProject.Arn
+                  - !GetAtt AppBuildProject.Arn
               - Sid: ECSAccess
                 Effect: Allow
                 Action:
@@ -217,6 +242,7 @@ Resources:
                   - ecr:BatchCheckLayerAvailability
                   - ecr:PutImage
                 Resource:
+                  - 'arn:aws:ecr:*:*:repository/app'
                   - 'arn:aws:ecr:*:*:repository/web'
                   #- ''
                   #- - 'arn:aws:ecr:*:*:repository/'
@@ -250,6 +276,29 @@ Resources:
         Type: CODEPIPELINE
         BuildSpec: buildspec_web.yml
       TimeoutInMinutes: 5
+  AppBuildProject:
+    Description: Creating AWS CodeBuild project
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      Cache:
+        Type: S3
+        Location: !Join [ "/", [ !Ref ArtifactStoreS3, buildcache ]]
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        EnvironmentVariables:
+          - Name: Branch
+            Value: master
+        Image: "aws/codebuild/docker:17.09.0"
+        PrivilegedMode: true
+        Type: LINUX_CONTAINER
+      Name: AppImageBuild
+      ServiceRole: !GetAtt CodeBuildRole.Arn
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: buildspec_app.yml
+      TimeoutInMinutes: 5
   AppPipeline: 
     Type: "AWS::CodePipeline::Pipeline"
     Properties: 
@@ -259,6 +308,22 @@ Resources:
         - 
           Name: Source
           Actions: 
+            - 
+              Name: AppSourceAction
+              ActionTypeId: 
+                Category: Source
+                Owner: ThirdParty
+                Version: 1
+                Provider: GitHub
+              OutputArtifacts: 
+                - 
+                  Name: AppSourceOutput
+              Configuration: 
+                Owner: !Ref RepoOwner
+                Repo: !Ref AppGitHubRepo
+                Branch: master
+                OAuthToken: !Ref GitHubTokenCodePipeline
+              RunOrder: 1
             - 
               Name: WebSourceAction
               ActionTypeId: 
@@ -294,9 +359,40 @@ Resources:
               Configuration: 
                 ProjectName: !Ref WebBuildProject
               RunOrder: 1
+            - 
+              Name: app
+              InputArtifacts: 
+                - 
+                  Name: AppSourceOutput
+              OutputArtifacts: 
+                - 
+                  Name: AppBuildOutput
+              ActionTypeId: 
+                Category: Build
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              Configuration: 
+                ProjectName: !Ref AppBuildProject
+              RunOrder: 1
         -
           Name: deploy
           Actions: 
+            - 
+              Name: DeployAppToECS
+              InputArtifacts: 
+                - 
+                  Name: AppBuildOutput
+              ActionTypeId: 
+                Category: Deploy
+                Owner: AWS
+                Version: 1
+                Provider: ECS
+              Configuration:
+                ClusterName: !Ref ECSCluster
+                ServiceName: !Ref ECSService
+                FileName: appimagedefinitions.json
+              RunOrder: 1
             - 
               Name: DeployWebToECS
               InputArtifacts: 
